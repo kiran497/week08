@@ -1,53 +1,56 @@
 # week08/.github/workflows/frontend_ci.yml
-
-name: Frontend CI - Build & Push Image
+name: Frontend CI - Build & Push Image (Podman)
 
 on:
-  # Manual trigger
   workflow_dispatch:
-
-  # Automatically on pushes to main branch
   push:
-    branches:
-      - main
-    paths: # Only trigger if changes are in the frontend directory
+    branches: [ main ]
+    paths:
       - 'frontend/**'
-      - '.github/workflows/frontend_ci.yml' # Trigger if this workflow file changes
+      - '.github/workflows/frontend_ci.yml'
 
-# Define global environment variables that can be used across jobs
 env:
-  # ACR Login Server (e.g., myregistry.azurecr.io)
-  # This needs to be set as a GitHub Repository Secret
+  # e.g. sit722containerr.azurecr.io (you already set this secret)
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
-  # Dynamically generate image tags based on Git SHA and GitHub Run ID
-  # This provides unique, traceable tags for each image build
   IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
 jobs:
   build_and_push_frontend:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
-    # Azure login using a Service Principal secret
-    - name: Azure Login
-      uses: azure/login@v1
-      with:
-        creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - name: Azure Login (OIDC)
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-    # Login to Azure Container Registry (ACR)
-    - name: Login to Azure Container Registry
-      run: az acr login --name ${{ env.ACR_LOGIN_SERVER }}
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
 
-    # Build and Push Docker image for Frontend
-    - name: Build and Push Frontend Image
-      run: |
-        docker build -t ${{ env.ACR_LOGIN_SERVER }}/frontend:latest ./frontend/
-        docker push ${{ env.ACR_LOGIN_SERVER }}/frontend:latest
+      # Login to ACR with a short-lived token (no admin creds required)
+      - name: Podman login to ACR (token)
+        env:
+          ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+        run: |
+          REG_NAME=$(echo "$ACR_LOGIN_SERVER" | cut -d. -f1)
+          TOKEN=$(az acr login --name "$REG_NAME" --expose-token -o tsv --query accessToken)
+          echo "$TOKEN" | podman login "$ACR_LOGIN_SERVER" \
+            -u 00000000-0000-0000-0000-000000000000 --password-stdin
 
-    # Logout from Azure for security (runs even if image push fails)
-    - name: Logout from Azure
-      run: az logout
-      if: always()
+      - name: Build & Push Frontend (Podman)
+        env:
+          ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+        run: |
+          podman build -t $ACR_LOGIN_SERVER/frontend:latest ./frontend
+          podman push  $ACR_LOGIN_SERVER/frontend:latest
+          # optional extra tag if you want traceability
+          # podman tag  $ACR_LOGIN_SERVER/frontend:latest $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
+          # podman push $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
+
+      - name: Logout from Azure
+        if: always()
+        run: az logout
