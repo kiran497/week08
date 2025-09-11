@@ -20,10 +20,10 @@ jobs:
   deploy_backend:
     runs-on: ubuntu-latest
     environment: Production
-    
+
     outputs:
       PRODUCT_API_IP: ${{ steps.get_product_ip.outputs.external_ip }}
-      ORDER_API_IP: ${{ steps.get_order_ip.outputs.external_ip }}
+      ORDER_API_IP:   ${{ steps.get_order_ip.outputs.external_ip }}
 
     steps:
       - name: Checkout repository
@@ -37,13 +37,18 @@ jobs:
 
       - name: Set Kubernetes context (get AKS credentials)
         run: |
-          az aks get-credentials --resource-group ${{ github.event.inputs.aks_resource_group }} --name ${{ github.event.inputs.aks_cluster_name }} --overwrite-existing
+          az aks get-credentials \
+            --resource-group "${{ github.event.inputs.aks_resource_group }}" \
+            --name "${{ github.event.inputs.aks_cluster_name }}" \
+            --overwrite-existing
+
+      # ✅ No Owner permission required
       - name: Check ACR attachment (no-op if already attached)
         run: |
           az aks check-acr \
-            --name ${{ inputs.aks_cluster_name }} \
-            --resource-group ${{ inputs.aks_resource_group }} \
-            --acr ${{ inputs.aks_acr_name }}
+            --name "${{ github.event.inputs.aks_cluster_name }}" \
+            --resource-group "${{ github.event.inputs.aks_resource_group }}" \
+            --acr "${{ github.event.inputs.aks_acr_name }}"
 
       - name: Deploy Backend Infrastructure (Namespace, ConfigMaps, Secrets, Databases)
         run: |
@@ -60,44 +65,57 @@ jobs:
           cd k8s/
           kubectl apply -f product-service.yaml
           kubectl apply -f order-service.yaml
-      
+
+      - name: Ensure services are LoadBalancers
+        run: |
+          # Try both canonical names and w08e1 suffixed names, ignore errors if not present
+          for SVC in product-service product-service-w08e1; do
+            kubectl patch svc "$SVC" -p '{"spec":{"type":"LoadBalancer"}}' --type=merge 2>/dev/null || true
+          done
+          for SVC in order-service order-service-w08e1; do
+            kubectl patch svc "$SVC" -p '{"spec":{"type":"LoadBalancer"}}' --type=merge 2>/dev/null || true
+          done
+
       - name: Wait for Backend LoadBalancer IPs
         run: |
-          echo "Waiting for Product, Order LoadBalancer IPs to be assigned (up to 5 minutes)..."
+          echo "Waiting for Product & Order LoadBalancer IPs (up to ~5 minutes)..."
           PRODUCT_IP=""
           ORDER_IP=""
-          
+
+          get_ip() { kubectl get svc "$1" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || true; }
+
           for i in $(seq 1 60); do
-            echo "Attempt $i/60 to get IPs..."
-            PRODUCT_IP=$(kubectl get service product-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
-            ORDER_IP=$(kubectl get service order-service-w08e1 -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+            echo "Attempt $i/60..."
+            PRODUCT_IP=$(get_ip product-service)
+            [[ -z "$PRODUCT_IP" ]] && PRODUCT_IP=$(get_ip product-service-w08e1)
+
+            ORDER_IP=$(get_ip order-service)
+            [[ -z "$ORDER_IP" ]] && ORDER_IP=$(get_ip order-service-w08e1)
 
             if [[ -n "$PRODUCT_IP" && -n "$ORDER_IP" ]]; then
-              echo "All backend LoadBalancer IPs assigned!"
               echo "Product Service IP: $PRODUCT_IP"
-              echo "Order Service IP: $ORDER_IP"
+              echo "Order Service IP:   $ORDER_IP"
               break
             fi
-            sleep 5 # Wait 5 seconds before next attempt
+            sleep 5
           done
-          
+
           if [[ -z "$PRODUCT_IP" || -z "$ORDER_IP" ]]; then
             echo "Error: One or more LoadBalancer IPs not assigned after timeout."
-            exit 1 # Fail the job if IPs are not obtained
+            exit 1
           fi
-          
-          # These are environment variables for subsequent steps in the *same job*
-          # And used to set the job outputs
-          echo "PRODUCT_IP=$PRODUCT_IP" >> $GITHUB_ENV
-          echo "ORDER_IP=$ORDER_IP" >> $GITHUB_ENV
+
+          echo "PRODUCT_IP=$PRODUCT_IP" >> "$GITHUB_ENV"
+          echo "ORDER_IP=$ORDER_IP"   >> "$GITHUB_ENV"
 
       - name: Capture Product Service IP for Workflow Output
         id: get_product_ip
-        run: echo "external_ip=${{ env.PRODUCT_IP }}" >> $GITHUB_OUTPUT
-      
+        run: echo "external_ip=${{ env.PRODUCT_IP }}" >> "$GITHUB_OUTPUT"
+
       - name: Capture Order Service IP for Workflow Output
         id: get_order_ip
-        run: echo "external_ip=${{ env.ORDER_IP }}" >> $GITHUB_OUTPUT
+        run: echo "external_ip=${{ env.ORDER_IP }}" >> "$GITHUB_OUTPUT"
 
       - name: Logout from Azure
         run: az logout
+
