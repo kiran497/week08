@@ -1,5 +1,5 @@
 # week08/.github/workflows/frontend_ci.yml
-name: Frontend CI - Build & Push Image
+name: Frontend CI - Build & Push Image (Podman)
 
 on:
   workflow_dispatch:
@@ -10,6 +10,7 @@ on:
       - '.github/workflows/frontend_ci.yml'
 
 env:
+  # e.g. sit722containerr.azurecr.io (you already set this secret)
   ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
   IMAGE_TAG: ${{ github.sha }}-${{ github.run_id }}
 
@@ -20,23 +21,35 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Azure Login
+      - name: Azure Login (OIDC)
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Login to Azure Container Registry
+      - name: Install Podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      # Login to ACR with a short-lived token (no admin creds required)
+      - name: Podman login to ACR (token)
+        env:
+          ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
         run: |
           REG_NAME=$(echo "$ACR_LOGIN_SERVER" | cut -d. -f1)
-          az acr login --name "$REG_NAME"
+          TOKEN=$(az acr login --name "$REG_NAME" --expose-token -o tsv --query accessToken)
+          echo "$TOKEN" | podman login "$ACR_LOGIN_SERVER" \
+            -u 00000000-0000-0000-0000-000000000000 --password-stdin
 
-      - name: Build and Push Frontend Image
+      - name: Build & Push Frontend (Podman)
+        env:
+          ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
         run: |
-          docker build -t $ACR_LOGIN_SERVER/frontend:latest ./frontend
-          docker push $ACR_LOGIN_SERVER/frontend:latest
-          # (optional extra tag you defined)
-          # docker tag  $ACR_LOGIN_SERVER/frontend:latest $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
-          # docker push $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
+          podman build -t $ACR_LOGIN_SERVER/frontend:latest ./frontend
+          podman push  $ACR_LOGIN_SERVER/frontend:latest
+          # optional extra tag if you want traceability
+          # podman tag  $ACR_LOGIN_SERVER/frontend:latest $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
+          # podman push $ACR_LOGIN_SERVER/frontend:$IMAGE_TAG
 
       - name: Logout from Azure
         if: always()
