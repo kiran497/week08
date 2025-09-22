@@ -70,8 +70,23 @@ jobs:
       - name: Wait for rollout
         run: |
           NS="${{ env.K8S_NAMESPACE }}"
-          kubectl -n "$NS" rollout status deployment/product-service-w08e1 --timeout=180s
-          kubectl -n "$NS" rollout status deployment/order-service-w08e1   --timeout=180s
+          kubectl -n "$NS" rollout status deployment/product-service-w08e1 --timeout=300s
+          kubectl -n "$NS" rollout status deployment/order-service-w08e1   --timeout=300s
+
+      - name: Diagnostics (on failure)
+        if: failure()
+        run: |
+          NS="${{ env.K8S_NAMESPACE }}"
+          echo "=== Deploy/RS/Pods/Services ==="
+          kubectl -n "$NS" get deploy,rs,po,svc -o wide || true
+          echo "=== Describe deployments ==="
+          kubectl -n "$NS" describe deploy product-service-w08e1 || true
+          kubectl -n "$NS" describe deploy order-service-w08e1   || true
+          echo "=== Recent events ==="
+          kubectl -n "$NS" get events --sort-by=.lastTimestamp | tail -n 100 || true
+          echo "=== Pod logs (first pod per app) ==="
+          P=$(kubectl -n "$NS" get po -l app=product-service-w08e1 -o name | head -n1); [ -n "$P" ] && kubectl -n "$NS" logs "$P" --all-containers --tail=200 || true
+          P=$(kubectl -n "$NS" get po -l app=order-service-w08e1   -o name | head -n1); [ -n "$P" ] && kubectl -n "$NS" logs "$P" --all-containers --tail=200 || true
 
       - name: Show cluster state
         if: always()
