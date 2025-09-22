@@ -196,3 +196,4 @@ cython_debug/
 .cursorignore
 .cursorindexingignore
 azure_credentials.json
+zure_credentials.json
