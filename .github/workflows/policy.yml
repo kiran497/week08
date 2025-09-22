@@ -1,0 +1,25 @@
+name: Policy Checks
+on: { pull_request: { branches: [develop, main] } }
+permissions: { contents: read, security-events: write }
+jobs:
+  codeql:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with: { languages: javascript }
+      - uses: github/codeql-action/analyze@v3
+  no-big-binaries:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fail on files > 20MB
+        run: |
+          base="origin/${{ github.base_ref }}"
+          git fetch origin ${{ github.base_ref }} --depth=1
+          for f in $(git diff --name-only $base); do
+            if [ -f "$f" ] && [ $(stat -c%s "$f") -gt 20000000 ]; then
+              echo "$f exceeds 20MB"; exit 1
+            fi
+          done
+          echo "OK"

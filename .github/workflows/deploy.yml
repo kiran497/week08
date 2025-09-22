@@ -1,0 +1,50 @@
+name: Deploy
+on:
+  workflow_run:
+    workflows: ["Release (Build & Push)"]
+    types: [completed]
+    branches: [main]
+permissions: { contents: read, id-token: write }
+
+env:
+  BACKEND_DEPLOY: backend-deployment
+  BACKEND_CONTAINER: backend
+  FRONTEND_DEPLOY: frontend-deployment
+  FRONTEND_CONTAINER: frontend
+
+jobs:
+  to-staging:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: az aks get-credentials -g ${{ secrets.AZ_RG }} -n ${{ secrets.AZ_AKS_NAME }} --overwrite-existing
+      - name: Rollout (staging)
+        run: |
+          kubectl set image deploy/${{ env.BACKEND_DEPLOY }}  ${{ env.BACKEND_CONTAINER }}=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/backend:${{ github.event.workflow_run.head_sha }}
+          kubectl set image deploy/${{ env.FRONTEND_DEPLOY }} ${{ env.FRONTEND_CONTAINER }}=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/frontend:${{ github.event.workflow_run.head_sha }}
+          kubectl rollout status deploy/${{ env.BACKEND_DEPLOY }}
+          kubectl rollout status deploy/${{ env.FRONTEND_DEPLOY }}
+
+  to-production:
+    needs: to-staging
+    runs-on: ubuntu-latest
+    environment: production   # approval gate in Environments
+    steps:
+      - uses: azure/login@v2
+        with:
+          client-id:       ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id:       ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - run: az aks get-credentials -g ${{ secrets.AZ_RG }} -n ${{ secrets.AZ_AKS_NAME }} --overwrite-existing
+      - name: Rollout (production)
+        run: |
+          kubectl set image deploy/${{ env.BACKEND_DEPLOY }}  ${{ env.BACKEND_CONTAINER }}=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/backend:${{ github.event.workflow_run.head_sha }}
+          kubectl set image deploy/${{ env.FRONTEND_DEPLOY }} ${{ env.FRONTEND_CONTAINER }}=${{ secrets.AZURE_ACR_NAME }}.azurecr.io/frontend:${{ github.event.workflow_run.head_sha }}
+          kubectl rollout status deploy/${{ env.BACKEND_DEPLOY }}
+          kubectl rollout status deploy/${{ env.FRONTEND_DEPLOY }}
