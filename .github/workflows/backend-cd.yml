@@ -57,7 +57,6 @@ jobs:
           resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
           cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
 
-      # Makes first run idempotent (creates objects if missing)
       - name: Apply manifests
         run: |
           kubectl -n "${{ env.K8S_NAMESPACE }}" apply -f k8s/
@@ -65,8 +64,8 @@ jobs:
       - name: Update deployments to new images
         run: |
           NS="${{ env.K8S_NAMESPACE }}"
-          kubectl -n "$NS" set image deployment/product-service-w08e1 product-service=$ACR_LOGIN_SERVER/product_service:${{ env.IMAGE_TAG }}
-          kubectl -n "$NS" set image deployment/order-service-w08e1   order-service=$ACR_LOGIN_SERVER/order_service:${{ env.IMAGE_TAG }}
+          kubectl -n "$NS" set image deployment/product-service-w08e1 *=$ACR_LOGIN_SERVER/product_service:${{ env.IMAGE_TAG }} --record=true
+          kubectl -n "$NS" set image deployment/order-service-w08e1   *=$ACR_LOGIN_SERVER/order_service:${{ env.IMAGE_TAG }} --record=true
 
       - name: Wait for rollout
         run: |
