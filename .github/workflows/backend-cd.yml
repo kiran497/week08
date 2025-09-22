@@ -18,7 +18,7 @@ permissions:
   deployments: write
 
 env:
-  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  ACR_LOGIN_SERVER: ${{ secrets.AZURE_CONTAINER_REGISTRY }}   # e.g. registryw8.azurecr.io
   IMAGE_TAG: ${{ github.sha }}
   K8S_NAMESPACE: ${{ secrets.K8S_NAMESPACE || vars.K8S_NAMESPACE || 'default' }}
 
@@ -54,8 +54,13 @@ jobs:
       - name: Set AKS context
         uses: azure/aks-set-context@v3
         with:
-          resource-group: ${{ vars.AKS_RESOURCE_GROUP }}
-          cluster-name:  ${{ vars.AKS_CLUSTER_NAME }}
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name:  ${{ secrets.AKS_CLUSTER_NAME }}
+
+      # Makes first run idempotent (creates objects if missing)
+      - name: Apply manifests
+        run: |
+          kubectl -n "${{ env.K8S_NAMESPACE }}" apply -f k8s/
 
       - name: Update deployments to new images
         run: |
