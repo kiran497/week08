@@ -1,36 +1,28 @@
 name: CI
 
+# Run this only on PUSH (feature/fix/chore branches). PRs use ci-pr.yml.
 on:
-  pull_request:
-    branches:
-      - develop
-      - main
-    paths-ignore:
-      - "**/*.md"
-      - ".github/**"
   push:
     branches:
-      - develop
-    paths-ignore:
-      - "**/*.md"
-      - ".github/**"
-
-permissions:
-  contents: read
+      - 'feature/**'
+      - 'fix/**'
+      - 'chore/**'
+    paths:
+      - 'backend/**'
+      - 'frontend/**'
+      - '.github/workflows/**'
 
 jobs:
-  backend:
-    uses: ./.github/workflows/reusable-ci.yml
-    with:
-      language: node
-      workdir: backend
-      test: npm test --if-present -- --ci
-      build: npm run build --if-present
-
   frontend:
-    uses: ./.github/workflows/reusable-ci.yml
+    uses: ./.github/workflows/_reusable-ci.yml   # <— underscore!
     with:
-      language: node
-      workdir: frontend
-      test: npm test --if-present -- --ci
-      build: npm run build --if-present
+      working-directory: frontend
+      run-tests: false
+      build-docker: false
+
+  backend:
+    uses: ./.github/workflows/_reusable-ci.yml   # <— underscore!
+    with:
+      working-directory: backend
+      run-tests: true
+      build-docker: false
