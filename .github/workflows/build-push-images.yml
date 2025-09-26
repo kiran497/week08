@@ -5,7 +5,6 @@ on:
 
 jobs:
   tag:
-    name: Make safe tag
     runs-on: ubuntu-latest
     outputs:
       safe: ${{ steps.s.outputs.safe }}

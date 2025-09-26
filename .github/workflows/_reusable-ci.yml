@@ -63,10 +63,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Assert Dockerfile exists (debug)
+      - name: Debug – verify Dockerfile exists
         run: |
-          echo "Context: ${{ inputs.working-directory }}"
-          test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile in ${{ inputs.working-directory }}" && exit 1)
+          echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
+          ls -la
+          ls -la "${{ inputs.working-directory }}"
+          test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile at ${{ inputs.working-directory }}/Dockerfile" && exit 1)
 
       - name: Docker Login (skip on PRs)
         if: github.event_name != 'pull_request'
@@ -79,9 +81,9 @@ jobs:
       - name: Build (push off on PRs)
         uses: docker/build-push-action@v5
         with:
-          context: ${{ inputs.working-directory }}   # <- correct folder
-          file: Dockerfile                            # <- relative to context
+          context: .
+          file: ${{ inputs.working-directory }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.ref_name }}
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:sha-${{ github.sha }}
