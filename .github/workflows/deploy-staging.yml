@@ -1,44 +1,45 @@
-name: Deploy to Staging (AKS)
+name: Release images (ACR)
 
 on:
   push:
-    branches: [ develop ]
+    branches: [ develop, main ]
+
+env:
+  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}   # e.g. kiranacr.azurecr.io
+  NS: week08
+  # main -> latest, anything else -> develop
+  TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'develop' }}
 
 jobs:
-  deploy:
+  build-push:
     runs-on: ubuntu-latest
-    environment: staging
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure login
-        uses: azure/login@v2
+      # Login to Azure Container Registry
+      - name: Login to ACR
+        uses: azure/docker-login@v2
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          login-server: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Set AKS context
-        uses: azure/aks-set-context@v4
+      - name: Build & push frontend
+        uses: docker/build-push-action@v5
         with:
-          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
-          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.NS }}/frontend:${{ env.TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
 
-      - name: Deploy manifests to AKS (staging)
-        uses: azure/k8s-deploy@v4
+      - name: Build & push backend
+        uses: docker/build-push-action@v5
         with:
-          action: deploy
-          manifests: |
-            k8s/frontend.yaml
-            k8s/backend.yaml
-          images: |
-            frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:develop
-            backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:develop
-          strategy: basic
-
-      - name: Wait for rollout & print status
-        run: |
-          kubectl get deploy
-          kubectl get pods -o wide
-          kubectl describe deploy frontend || true
-          kubectl describe deploy backend  || true
-          kubectl get svc -o wide
+          context: ./backend
+          file: ./backend/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.NS }}/backend:${{ env.TAG }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

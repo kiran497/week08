@@ -26,19 +26,17 @@ jobs:
       - name: Deploy manifests to AKS (prod)
         uses: azure/k8s-deploy@v4
         with:
-          action: deploy
+          namespace: default
           manifests: |
             k8s/frontend.yaml
             k8s/backend.yaml
           images: |
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:latest
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:latest
-          strategy: basic
 
-      - name: Wait for rollout & print status
+      - name: Show rollout status & events
         run: |
-          kubectl get deploy
+          kubectl rollout status deploy/frontend --timeout=120s || true
+          kubectl rollout status deploy/backend --timeout=120s || true
           kubectl get pods -o wide
-          kubectl describe deploy frontend || true
-          kubectl describe deploy backend  || true
           kubectl get svc -o wide
