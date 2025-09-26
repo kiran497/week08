@@ -2,7 +2,9 @@ name: Release Images (ACR)
 
 on:
   push:
-    branches: [ develop, main ]   # build on both branches
+    branches:
+      - develop
+      - main
 
 jobs:
   build:
