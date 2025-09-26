@@ -99,9 +99,8 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.working-directory }}
-          file: ${{ inputs.working-directory }}/Dockerfile
+          file: Dockerfile           # <— relative to the context
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ github.ref_name }}
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:sha-${{ github.sha }}
-          
