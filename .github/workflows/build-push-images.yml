@@ -5,7 +5,7 @@ on:
 
 jobs:
   frontend:
-    uses: ./.github/workflows/_reusable-ci.yml
+    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
     secrets: inherit
     with:
       working-directory: frontend
@@ -13,11 +13,20 @@ jobs:
       build-docker: true
       image-name: frontend
 
-  backend:
-    uses: ./.github/workflows/_reusable-ci.yml
+  backend-order:
+    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
     secrets: inherit
     with:
-      working-directory: backend
+      working-directory: backend/order_service
       run-tests: false
       build-docker: true
-      image-name: backend
+      image-name: backend-order
+
+  backend-product:
+    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
+    secrets: inherit
+    with:
+      working-directory: backend/product_service
+      run-tests: false
+      build-docker: true
+      image-name: backend-product

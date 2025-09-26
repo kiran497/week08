@@ -3,11 +3,22 @@ name: reusable-ci
 on:
   workflow_call:
     inputs:
-      working-directory: { description: Service directory, required: true, type: string }
-      node-version:      { type: string,  default: '20' }
-      run-tests:         { type: boolean, default: true }
-      build-docker:      { type: boolean, default: false }
-      image-name:        { type: string,  default: '' }
+      working-directory:
+        description: Service directory (folder that contains the Dockerfile)
+        required: true
+        type: string
+      node-version:
+        type: string
+        default: '20'
+      run-tests:
+        type: boolean
+        default: true
+      build-docker:
+        type: boolean
+        default: false
+      image-name:
+        type: string
+        default: ''
 
 jobs:
   ci:
@@ -16,37 +27,54 @@ jobs:
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}
       cancel-in-progress: true
-    permissions: { contents: read }
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
+      # Does this folder have a package.json?
       - name: Detect package.json
         id: detect
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f package.json ]; then echo "has_pkg=true" >> $GITHUB_OUTPUT; else echo "has_pkg=false" >> $GITHUB_OUTPUT; fi
+          if [ -f package.json ]; then
+            echo "has_pkg=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_pkg=false" >> $GITHUB_OUTPUT
+          fi
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Setup Node
+        if: steps.detect.outputs.has_pkg == 'true'
         uses: actions/setup-node@v4
         with:
-          node-version: ${{ inputs.node-version }}
+          node-version: ${{ inputs['node-version'] }}
           cache: npm
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Install
+        if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f package-lock.json ]; then npm ci; else echo "No lockfile -> npm install"; npm install; fi
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "No package-lock.json -> using npm install"
+            npm install
+          fi
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Lint
+        if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: npm run lint --if-present
 
-      - if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
+      - name: Test
+        if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
         working-directory: ${{ inputs.working-directory }}
         run: npm test --if-present -- --ci
 
-      - if: steps.detect.outputs.has_pkg != 'true'
+      - name: Skip note (no package.json)
+        if: steps.detect.outputs.has_pkg != 'true'
         run: echo "No package.json in ${{ inputs.working-directory }} – skipping Node steps."
 
   docker:
@@ -54,37 +82,44 @@ jobs:
     if: inputs.build-docker == true
     needs: ci
     runs-on: ubuntu-latest
-    permissions: { contents: read }
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 
-      - name: Show tree for debug
+      # Create a safe docker tag from the branch name (slashes etc. -> dashes)
+      - name: Compute docker tag
+        id: tag
+        shell: bash
         run: |
-          echo "Branch: $GITHUB_REF_NAME"
-          echo "Repo root:"; ls -la
-          echo "Service dir (${{ inputs.working-directory }}):"; ls -la "${{ inputs.working-directory }}"
-          test -f "${{ inputs.working-directory }}/Dockerfile" || { echo "MISSING Dockerfile"; exit 1; }
+          raw="${GITHUB_REF_NAME}"
+          safe="${raw//[^a-zA-Z0-9._-]/-}"
+          echo "safe=${safe}" >> "$GITHUB_OUTPUT"
+          echo "Using tag: ${safe}"
 
+      # Login to ACR (only when NOT a PR)
       - name: Docker Login (skip on PRs)
         if: github.event_name != 'pull_request'
         uses: azure/docker-login@v2
         with:
           login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-          username:     ${{ secrets.ACR_USERNAME }}
-          password:     ${{ secrets.ACR_PASSWORD }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Compute safe tag
-        id: tag
+      # Defensive check so we fail early with a clear message
+      - name: Verify Dockerfile exists
+        working-directory: ${{ inputs.working-directory }}
         run: |
-          SAFE="${GITHUB_REF_NAME//\//-}"
-          echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
+          echo "PWD=$(pwd)"
+          ls -la
+          test -f Dockerfile || { echo "::error::Dockerfile not found in $(pwd)"; exit 1; }
 
       - name: Build (push off on PRs)
         uses: docker/build-push-action@v5
         with:
-          context: .
-          file:    ${{ inputs.working-directory }}/Dockerfile
-          push:    ${{ github.event_name != 'pull_request' }}
+          context: ${{ inputs.working-directory }}        # build context is the service directory
+          file: Dockerfile                                # path is relative to the context above
+          push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ steps.tag.outputs.safe }}
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:sha-${{ github.sha }}
