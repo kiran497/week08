@@ -26,10 +26,10 @@ jobs:
       - name: Deploy manifests to AKS (staging)
         uses: azure/k8s-deploy@v4
         with:
+          action: deploy
           manifests: |
             k8s/frontend.yaml
             k8s/backend.yaml
           images: |
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:develop
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:develop
-          strategy: basic
