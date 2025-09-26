@@ -11,7 +11,7 @@ spec:
     spec:
       containers:
         - name: backend-container
-          image: kiranacr.azurecr.io/week08/backend:latest   # staging will override to :develop
+          image: kiranacr.azurecr.io/week08/backend:latest   # (workflow will override tag)
           imagePullPolicy: Always
           ports:
             - containerPort: 8000
