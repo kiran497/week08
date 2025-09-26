@@ -63,7 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Helpful debug to catch bad paths
+    # Helpful debug to catch bad paths
       - name: Debug – verify Dockerfile exists
         run: |
           echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
