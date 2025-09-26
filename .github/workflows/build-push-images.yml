@@ -1,32 +1,51 @@
-name: CI only (manual)
+name: Build images (manual)
 
 on:
   workflow_dispatch:
 
 jobs:
+  tag:
+    name: Make safe tag
+    runs-on: ubuntu-latest
+    outputs:
+      safe: ${{ steps.s.outputs.safe }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: s
+        run: |
+          RAW="${GITHUB_REF_NAME}"
+          SAFE="${RAW//\//-}"    # replace "/" -> "-" for Docker tag
+          echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
+
   frontend:
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: frontend
       run-tests: false
-      build-docker: false
+      build-docker: true
       image-name: frontend
+      docker-tag: ${{ needs.tag.outputs.safe }}
 
-  backend-order:
+  backend_order:
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: backend/order_service
       run-tests: false
-      build-docker: false
+      build-docker: true
       image-name: backend-order
+      docker-tag: ${{ needs.tag.outputs.safe }}
 
-  backend-product:
+  backend_product:
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: backend/product_service
       run-tests: false
-      build-docker: false
+      build-docker: true
       image-name: backend-product
+      docker-tag: ${{ needs.tag.outputs.safe }}

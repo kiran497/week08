@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: Service directory
+        description: 'Service directory'
         required: true
         type: string
       node-version:
@@ -17,6 +17,9 @@ on:
         type: boolean
         default: false
       image-name:
+        type: string
+        default: ''
+      docker-tag:              # <— tag to use for the image (sanitized branch, etc.)
         type: string
         default: ''
 
@@ -38,9 +41,9 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
         run: |
           if [ -f package.json ]; then
-            echo "has_pkg=true" >> "$GITHUB_OUTPUT"
+            echo "has_pkg=true" >> $GITHUB_OUTPUT
           else
-            echo "has_pkg=false" >> "$GITHUB_OUTPUT"
+            echo "has_pkg=false" >> $GITHUB_OUTPUT
           fi
 
       - name: Setup Node
@@ -55,7 +58,12 @@ jobs:
         if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "No package-lock.json -> using npm install"
+            npm install
+          fi
 
       - name: Lint
         if: steps.detect.outputs.has_pkg == 'true'
@@ -81,33 +89,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Create a Docker-safe tag (replace "/" with "-")
-      - name: Compute safe tag
-        id: tag
-        shell: bash
-        run: |
-          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
-            ref="${GITHUB_HEAD_REF}"
-          else
-            ref="${GITHUB_REF_NAME}"
-          fi
-          safe="${ref//\//-}"
-          echo "safe=$safe" >> "$GITHUB_OUTPUT"
-
       - name: Docker Login (skip on PRs)
         if: github.event_name != 'pull_request'
         uses: azure/docker-login@v2
         with:
-          login-server: ${{ secrets.ACR_LOGIN_SERVER }}   # e.g. kiranacr.azurecr.io
-          username: ${{ secrets.ACR_USERNAME }}           # e.g. kiranacr (admin user)
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
       - name: Build (push off on PRs)
         uses: docker/build-push-action@v5
         with:
-          context: ${{ inputs.working-directory }}
-          file: ${{ inputs.working-directory }}/Dockerfile
+          context: ${{ inputs.working-directory }}   # directory that contains Dockerfile
+          file: Dockerfile                            # relative to the context above
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ steps.tag.outputs.safe }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:sha-${{ github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.sha }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:sha-${{ github.sha }}
