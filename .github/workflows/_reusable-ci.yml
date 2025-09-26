@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: 'Service directory'
+        description: Service directory
         required: true
         type: string
       node-version:
@@ -33,15 +33,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Detect whether this service has a package.json
       - name: Detect package.json
         id: detect
         working-directory: ${{ inputs.working-directory }}
         run: |
           if [ -f package.json ]; then
-            echo "has_pkg=true" >> $GITHUB_OUTPUT
+            echo "has_pkg=true" >> "$GITHUB_OUTPUT"
           else
-            echo "has_pkg=false" >> $GITHUB_OUTPUT
+            echo "has_pkg=false" >> "$GITHUB_OUTPUT"
           fi
 
       - name: Setup Node
@@ -59,7 +58,6 @@ jobs:
           if [ -f package-lock.json ]; then
             npm ci
           else
-            echo "No package-lock.json -> using npm install"
             npm install
           fi
 
@@ -92,15 +90,24 @@ jobs:
         uses: azure/docker-login@v2
         with:
           login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          username:     ${{ secrets.ACR_USERNAME }}
+          password:     ${{ secrets.ACR_PASSWORD }}
+
+      # Make a Docker-safe tag from branch name (slashes/spaces -> dashes)
+      - name: Compute safe image tag
+        id: tag
+        run: |
+          ref="${GITHUB_REF_NAME}"
+          safe="${ref//\//-}"
+          safe="${safe// /-}"
+          echo "safe=$safe" >> "$GITHUB_OUTPUT"
 
       - name: Build (push off on PRs)
         uses: docker/build-push-action@v5
         with:
           context: ${{ inputs.working-directory }}
-          file: Dockerfile           # <— relative to the context
+          file: Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ github.ref_name }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ steps.tag.outputs.safe }}
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:sha-${{ github.sha }}
