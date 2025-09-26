@@ -1,45 +1,49 @@
-name: Release images (ACR)
+name: Deploy to Staging (AKS)
 
 on:
   push:
-    branches: [ develop, main ]
+    branches: [ develop ]
 
-env:
-  REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}   # e.g. kiranacr.azurecr.io
-  NS: week08
-  # main -> latest, anything else -> develop
-  TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'develop' }}
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build-push:
+  deploy:
     runs-on: ubuntu-latest
+    environment: staging
+
     steps:
       - uses: actions/checkout@v4
 
-      # Login to Azure Container Registry
-      - name: Login to ACR
-        uses: azure/docker-login@v2
+      - name: Azure login
+        uses: azure/login@v2
         with:
-          login-server: ${{ env.REGISTRY }}
-          username: ${{ secrets.ACR_USERNAME }}
-          password: ${{ secrets.ACR_PASSWORD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Build & push frontend
-        uses: docker/build-push-action@v5
+      - name: Set AKS context
+        uses: azure/aks-set-context@v4
         with:
-          context: ./frontend
-          file: ./frontend/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.NS }}/frontend:${{ env.TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+          cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
 
-      - name: Build & push backend
-        uses: docker/build-push-action@v5
+      - name: Deploy manifests to AKS (staging)
+        uses: azure/k8s-deploy@v4
         with:
-          context: ./backend
-          file: ./backend/Dockerfile
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ env.NS }}/backend:${{ env.TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          namespace: default
+          manifests: |
+            k8s/frontend.yaml
+            k8s/backend.yaml
+          images: |
+            frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:develop
+            backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:develop
+
+      - name: Show rollout status & services
+        run: |
+          kubectl rollout status deploy/frontend --timeout=180s || true
+          kubectl rollout status deploy/backend  --timeout=180s || true
+          kubectl get deploy,po,svc -o wide
