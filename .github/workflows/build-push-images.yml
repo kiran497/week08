@@ -14,7 +14,7 @@ jobs:
       - id: s
         run: |
           RAW="${GITHUB_REF_NAME}"
-          SAFE="${RAW//\//-}"    # replace "/" -> "-" for Docker tag
+          SAFE="${RAW//\//-}"
           echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
 
   frontend:

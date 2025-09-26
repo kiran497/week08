@@ -4,7 +4,6 @@ on:
   workflow_call:
     inputs:
       working-directory:
-        description: 'Service directory'
         required: true
         type: string
       node-version:
@@ -19,7 +18,7 @@ on:
       image-name:
         type: string
         default: ''
-      docker-tag:              # <— tag to use for the image (sanitized branch, etc.)
+      docker-tag:
         type: string
         default: ''
 
@@ -27,67 +26,47 @@ jobs:
   ci:
     name: CI - ${{ inputs.working-directory }}
     runs-on: ubuntu-latest
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}-${{ inputs.working-directory }}
-      cancel-in-progress: true
-    permissions:
-      contents: read
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Detect package.json
         id: detect
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f package.json ]; then
-            echo "has_pkg=true" >> $GITHUB_OUTPUT
-          else
-            echo "has_pkg=false" >> $GITHUB_OUTPUT
-          fi
+          if [ -f package.json ]; then echo "has_pkg=true" >> $GITHUB_OUTPUT; else echo "has_pkg=false" >> $GITHUB_OUTPUT; fi
 
-      - name: Setup Node
-        if: steps.detect.outputs.has_pkg == 'true'
+      - if: steps.detect.outputs.has_pkg == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
-      - name: Install
-        if: steps.detect.outputs.has_pkg == 'true'
+      - if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: |
-          if [ -f package-lock.json ]; then
-            npm ci
-          else
-            echo "No package-lock.json -> using npm install"
-            npm install
-          fi
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
-      - name: Lint
-        if: steps.detect.outputs.has_pkg == 'true'
+      - if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: npm run lint --if-present
 
-      - name: Test
-        if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
+      - if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
         working-directory: ${{ inputs.working-directory }}
         run: npm test --if-present -- --ci
 
-      - name: Skip note (no package.json)
-        if: steps.detect.outputs.has_pkg != 'true'
-        run: echo "No package.json in ${{ inputs.working-directory }} – skipping Node steps."
-
   docker:
     name: Docker build/publish - ${{ inputs.image-name }}
-    if: inputs.build-docker == true
+    if: inputs.build-docker
     needs: ci
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
     steps:
       - uses: actions/checkout@v4
+
+      - name: Assert Dockerfile exists (debug)
+        run: |
+          echo "Context: ${{ inputs.working-directory }}"
+          test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile in ${{ inputs.working-directory }}" && exit 1)
 
       - name: Docker Login (skip on PRs)
         if: github.event_name != 'pull_request'
@@ -100,8 +79,8 @@ jobs:
       - name: Build (push off on PRs)
         uses: docker/build-push-action@v5
         with:
-          context: ${{ inputs.working-directory }}   # directory that contains Dockerfile
-          file: Dockerfile                            # relative to the context above
+          context: ${{ inputs.working-directory }}   # <- correct folder
+          file: Dockerfile                            # <- relative to context
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.sha }}
