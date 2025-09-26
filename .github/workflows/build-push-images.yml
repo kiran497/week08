@@ -29,7 +29,7 @@ jobs:
 
   backend_order:
     uses: ./.github/workflows/_reusable-ci.yml
-    needs: tag
+    needs: [tag, frontend]         # <- wait for frontend to finish
     secrets: inherit
     with:
       working-directory: backend/order_service
@@ -40,7 +40,7 @@ jobs:
 
   backend_product:
     uses: ./.github/workflows/_reusable-ci.yml
-    needs: tag
+    needs: [tag, backend_order]    # <- wait for backend_order to finish
     secrets: inherit
     with:
       working-directory: backend/product_service

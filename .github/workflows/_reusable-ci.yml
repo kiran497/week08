@@ -63,36 +63,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Minimal buildx using the Docker driver
-      - name: Setup buildx (docker driver)
-        uses: docker/setup-buildx-action@v3
-        with:
-          driver: docker
-
       - name: Verify Dockerfile is present
         run: |
           echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
           ls -la "${{ inputs.working-directory }}"
           test -f "${{ inputs.working-directory }}/Dockerfile"
 
-      - name: Docker Login (skip on PRs)
-        if: github.event_name != 'pull_request'
-        uses: azure/docker-login@v2
+      # Login to ACR (you can keep azure/docker-login, this one is also fine)
+      - name: Docker Login
+        uses: docker/login-action@v3
         with:
-          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
-          username:     ${{ secrets.ACR_USERNAME }}
-          password:     ${{ secrets.ACR_PASSWORD }}
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build & (maybe) push
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          file: ${{ inputs.working-directory }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
-          # Turn OFF features that trigger the RST_STREAM crash
-          provenance: false
-          sbom: false
-          # Tags
-          tags: |
-            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.ref_name }}
-            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:sha-${{ github.sha }}
+      # Classic docker build (no buildx/BuildKit) + push
+      - name: Build & push (classic docker)
+        env:
+          DOCKER_BUILDKIT: 0
+        run: |
+          set -euo pipefail
+          IMAGE_BASE="${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}"
+          TAG1="${IMAGE_BASE}:${{ inputs.docker-tag || github.ref_name }}"
+          TAG2="${IMAGE_BASE}:sha-${{ github.sha }}"
+          echo "Building ${TAG1} and ${TAG2} from ${{ inputs.working-directory }}"
+          docker build --pull \
+            -f "${{ inputs.working-directory }}/Dockerfile" \
+            -t "${TAG1}" -t "${TAG2}" \
+            "${{ inputs.working-directory }}"
+
+          # Push both tags (manual workflow isn't a PR, so pushing is fine)
+          docker push "${TAG1}"
+          docker push "${TAG2}"
