@@ -1,32 +1,32 @@
-name: Build images (manual)
+name: CI only (manual)
 
 on:
   workflow_dispatch:
 
 jobs:
   frontend:
-    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
+    uses: ./.github/workflows/_reusable-ci.yml
     secrets: inherit
     with:
       working-directory: frontend
       run-tests: false
-      build-docker: true
+      build-docker: false
       image-name: frontend
 
   backend-order:
-    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
+    uses: ./.github/workflows/_reusable-ci.yml
     secrets: inherit
     with:
       working-directory: backend/order_service
       run-tests: false
-      build-docker: true
+      build-docker: false
       image-name: backend-order
 
   backend-product:
-    uses: kiran497/week08/.github/workflows/_reusable-ci.yml@main
+    uses: ./.github/workflows/_reusable-ci.yml
     secrets: inherit
     with:
       working-directory: backend/product_service
       run-tests: false
-      build-docker: true
+      build-docker: false
       image-name: backend-product
