@@ -10,11 +10,11 @@ spec:
     metadata: { labels: { app: backend } }
     spec:
       containers:
-        - name: backend-container          # <— keep this name
-          image: kiranacr.azurecr.io/week08/backend:latest
+        - name: backend-container
+          image: kiranacr.azurecr.io/week08/backend:latest   # (workflow will override tag)
           imagePullPolicy: Always
           ports:
-            - containerPort: 3000          # change if your backend uses another port
+            - containerPort: 8000
 ---
 apiVersion: v1
 kind: Service
@@ -25,5 +25,5 @@ spec:
   selector: { app: backend }
   type: LoadBalancer
   ports:
-    - port: 3000
-      targetPort: 3000
+    - port: 8000
+      targetPort: 8000
