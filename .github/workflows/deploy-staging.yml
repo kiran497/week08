@@ -4,6 +4,14 @@ on:
   push:
     branches: [ develop ]
 
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-staging-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -26,11 +34,16 @@ jobs:
       - name: Deploy manifests to AKS (staging)
         uses: azure/k8s-deploy@v4
         with:
-          action: deploy
+          namespace: default
           manifests: |
             k8s/frontend.yaml
             k8s/backend.yaml
           images: |
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:develop
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:develop
-          rollout-status-timeout: '600s'
+
+      - name: Show rollout status & services
+        run: |
+          kubectl rollout status deploy/frontend --timeout=180s || true
+          kubectl rollout status deploy/backend  --timeout=180s || true
+          kubectl get deploy,po,svc -o wide

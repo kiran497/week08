@@ -26,6 +26,9 @@ jobs:
   ci:
     name: CI - ${{ inputs.working-directory }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
     steps:
       - uses: actions/checkout@v4
 
@@ -60,30 +63,31 @@ jobs:
     if: inputs.build-docker
     needs: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug – verify Dockerfile exists
+      - name: Verify Dockerfile is present
         run: |
           echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
-          ls -la
           ls -la "${{ inputs.working-directory }}"
-          test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile at ${{ inputs.working-directory }}/Dockerfile" && exit 1)
+          test -f "${{ inputs.working-directory }}/Dockerfile"
 
-      - name: Docker Login (skip on PRs)
-        if: github.event_name != 'pull_request'
-        uses: azure/docker-login@v2
+      - name: Docker Login
+        uses: docker/login-action@v3
         with:
-          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          registry: ${{ secrets.ACR_LOGIN_SERVER }}
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build (push off on PRs)
+      - name: Build & push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ inputs.working-directory }}
           file: ${{ inputs.working-directory }}/Dockerfile
-          push: ${{ github.event_name != 'pull_request' }}
+          push: true
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.ref_name }}
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:sha-${{ github.sha }}
