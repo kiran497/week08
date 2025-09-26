@@ -9,6 +9,7 @@ jobs:
     outputs:
       safe: ${{ steps.s.outputs.safe }}
     steps:
+      - uses: actions/checkout@v4
       - id: s
         run: |
           RAW="${GITHUB_REF_NAME}"
@@ -16,8 +17,8 @@ jobs:
           echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
 
   frontend:
-    needs: tag
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: frontend
@@ -27,8 +28,8 @@ jobs:
       docker-tag: ${{ needs.tag.outputs.safe }}
 
   backend_order:
-    needs: tag
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: backend/order_service
@@ -38,8 +39,8 @@ jobs:
       docker-tag: ${{ needs.tag.outputs.safe }}
 
   backend_product:
-    needs: tag
     uses: ./.github/workflows/_reusable-ci.yml
+    needs: tag
     secrets: inherit
     with:
       working-directory: backend/product_service
