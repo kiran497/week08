@@ -1,0 +1,29 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels: { app: backend }
+spec:
+  replicas: 1
+  selector: { matchLabels: { app: backend } }
+  template:
+    metadata: { labels: { app: backend } }
+    spec:
+      containers:
+        - name: backend-container          # <— keep this name
+          image: kiranacr.azurecr.io/week08/backend:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 3000          # change if your backend uses another port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  labels: { app: backend }
+spec:
+  selector: { app: backend }
+  type: LoadBalancer
+  ports:
+    - port: 3000
+      targetPort: 3000
