@@ -1,0 +1,35 @@
+name: Release Images (ACR)
+
+on:
+  push:
+    branches: [ develop, main ]   # build on both branches
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        svc:
+          - { dir: 'frontend', image: 'frontend' }
+          - { dir: 'backend',  image: 'backend'  }
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ secrets.ACR_LOGIN_SERVER }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build & Push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ matrix.svc.dir }}
+          file: ${{ matrix.svc.dir }}/Dockerfile
+          push: true
+          tags: |
+            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ matrix.svc.image }}:${{ github.ref_name }}
+            ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ matrix.svc.image }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
