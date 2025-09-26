@@ -33,3 +33,12 @@ jobs:
           images: |
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:develop
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:develop
+          strategy: basic
+
+      - name: Wait for rollout & print status
+        run: |
+          kubectl get deploy
+          kubectl get pods -o wide
+          kubectl describe deploy frontend || true
+          kubectl describe deploy backend  || true
+          kubectl get svc -o wide

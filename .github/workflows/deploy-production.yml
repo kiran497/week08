@@ -23,7 +23,7 @@ jobs:
           resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
           cluster-name: ${{ secrets.AKS_CLUSTER_NAME }}
 
-      - name: Deploy manifests to AKS (production)
+      - name: Deploy manifests to AKS (prod)
         uses: azure/k8s-deploy@v4
         with:
           action: deploy
@@ -31,5 +31,14 @@ jobs:
             k8s/frontend.yaml
             k8s/backend.yaml
           images: |
-            frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:main
-            backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:main
+            frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:latest
+            backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:latest
+          strategy: basic
+
+      - name: Wait for rollout & print status
+        run: |
+          kubectl get deploy
+          kubectl get pods -o wide
+          kubectl describe deploy frontend || true
+          kubectl describe deploy backend  || true
+          kubectl get svc -o wide
