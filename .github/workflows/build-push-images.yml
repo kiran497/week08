@@ -1,5 +1,3 @@
-name: Build images (manual)
-
 on:
   workflow_dispatch:
 
@@ -9,22 +7,12 @@ jobs:
     outputs:
       safe: ${{ steps.s.outputs.safe }}
     steps:
+      - uses: actions/checkout@v4
       - id: s
         run: |
           RAW="${GITHUB_REF_NAME}"
           SAFE="${RAW//\//-}"
           echo "safe=$SAFE" >> "$GITHUB_OUTPUT"
-
-  frontend:
-    uses: ./.github/workflows/_reusable-ci.yml
-    needs: tag
-    secrets: inherit
-    with:
-      working-directory: frontend
-      run-tests: false
-      build-docker: true
-      image-name: frontend
-      docker-tag: ${{ needs.tag.outputs.safe }}
 
   backend_order:
     uses: ./.github/workflows/_reusable-ci.yml
@@ -39,11 +27,22 @@ jobs:
 
   backend_product:
     uses: ./.github/workflows/_reusable-ci.yml
-    needs: tag
+    needs: [tag, backend_order]   # wait for backend_order to finish
     secrets: inherit
     with:
       working-directory: backend/product_service
       run-tests: false
       build-docker: true
       image-name: backend-product
+      docker-tag: ${{ needs.tag.outputs.safe }}
+
+  frontend:
+    uses: ./.github/workflows/_reusable-ci.yml
+    needs: [tag, backend_product] # wait for backend_product to finish
+    secrets: inherit
+    with:
+      working-directory: frontend
+      run-tests: false
+      build-docker: true
+      image-name: frontend
       docker-tag: ${{ needs.tag.outputs.safe }}
