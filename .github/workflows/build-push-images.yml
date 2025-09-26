@@ -1,0 +1,23 @@
+name: Build & Push Images
+on:
+  push:
+    branches: [ develop, main ]
+    paths:
+      - 'frontend/**'
+      - 'backend/**'
+      - 'k8s/**'
+      - '.github/workflows/**'
+
+jobs:
+  docker:
+    strategy:
+      matrix:
+        svc:
+          - { dir: 'frontend', image: 'frontend' }
+          - { dir: 'backend',  image: 'backend'  }
+    uses: ./.github/workflows/_reusable-ci.yml
+    with:
+      working-directory: ${{ matrix.svc.dir }}
+      run-tests: false
+      build-docker: true
+      image-name: ${{ matrix.svc.image }}
