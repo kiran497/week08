@@ -6,18 +6,12 @@ on:
 
 permissions:
   contents: read
-  packages: write
-
-concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: true
+  id-token: write   # required for azure/login OIDC
 
 env:
   REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}   # e.g. kiranacr.azurecr.io
-  USERNAME: ${{ secrets.ACR_USERNAME }}
-  PASSWORD: ${{ secrets.ACR_PASSWORD }}
   NS: week08
-  TAG: ${{ github.ref == 'refs/heads/main' && 'latest' || 'develop' }}
+  TAG: ${{ github.ref_name == 'main' && 'latest' || 'develop' }}
 
 jobs:
   build-push:
@@ -25,25 +19,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Login to ACR
-        uses: docker/login-action@v3
+      - name: Azure login
+        uses: azure/login@v2
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ env.USERNAME }}
-          password: ${{ env.PASSWORD }}
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: ACR login
+        shell: bash
+        run: |
+          set -euo pipefail
+          ACR_NAME="$(echo "$REGISTRY" | cut -d. -f1)"
+          az acr login --name "$ACR_NAME"
 
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.NS }}/frontend:${{ env.TAG }}
+          tags: ${{ env.REGISTRY }}/${{ env.NS }}/frontend:${{ env.TAG }}
 
       - name: Build & push backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
           push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.NS }}/backend:${{ env.TAG }}
+          tags: ${{ env.REGISTRY }}/${{ env.NS }}/backend:${{ env.TAG }}
