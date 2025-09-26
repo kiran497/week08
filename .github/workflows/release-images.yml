@@ -6,10 +6,12 @@ on:
 
 permissions:
   contents: read
-  id-token: write   # required for azure/login OIDC
+  id-token: write   # needed by some actions; fine to keep
 
 env:
   REGISTRY: ${{ secrets.ACR_LOGIN_SERVER }}   # e.g. kiranacr.azurecr.io
+  USERNAME: ${{ secrets.ACR_USERNAME }}
+  PASSWORD: ${{ secrets.ACR_PASSWORD }}
   NS: week08
   TAG: ${{ github.ref_name == 'main' && 'latest' || 'develop' }}
 
@@ -19,28 +21,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Azure login
-        uses: azure/login@v2
+      - name: Login to ACR
+        uses: docker/login-action@v3
         with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          registry: ${{ env.REGISTRY }}
+          username: ${{ env.USERNAME }}
+          password: ${{ env.PASSWORD }}
 
-      - name: ACR login
-        shell: bash
-        run: |
-          set -euo pipefail
-          ACR_NAME="$(echo "$REGISTRY" | cut -d. -f1)"
-          az acr login --name "$ACR_NAME"
-
+      # ---- Frontend image ----
       - name: Build & push frontend
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
+          # if your frontend has a Dockerfile at ./frontend/Dockerfile this works.
+          # remove "file:" line if your Dockerfile name is exactly "Dockerfile".
+          file: ./frontend/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.NS }}/frontend:${{ env.TAG }}
 
+      # ---- Backend image ----
       - name: Build & push backend
         uses: docker/build-push-action@v5
         with:
           context: ./backend
+          file: ./backend/Dockerfile
           push: true
           tags: ${{ env.REGISTRY }}/${{ env.NS }}/backend:${{ env.TAG }}
