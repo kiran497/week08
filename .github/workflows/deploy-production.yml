@@ -2,17 +2,15 @@ name: Deploy to Production (AKS)
 
 on:
   push:
-    branches:
-      - main
+    branches: [ main ]          # deploy only when main is updated (after PR merge)
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    environment: production
+    environment: production     # make sure you have a “production” environment in Settings → Environments
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
       - name: Azure login
         uses: azure/login@v2
@@ -35,3 +33,4 @@ jobs:
           images: |
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:main
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:main
+          rollout-status-timeout: '600s'
