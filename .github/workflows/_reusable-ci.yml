@@ -63,6 +63,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Helpful debug to catch bad paths
       - name: Debug – verify Dockerfile exists
         run: |
           echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
@@ -70,6 +71,7 @@ jobs:
           ls -la "${{ inputs.working-directory }}"
           test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile at ${{ inputs.working-directory }}/Dockerfile" && exit 1)
 
+      # Login to ACR (skip on PRs)
       - name: Docker Login (skip on PRs)
         if: github.event_name != 'pull_request'
         uses: azure/docker-login@v2
@@ -78,12 +80,15 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Build (push off on PRs)
+      # Buildx with cache; push only when not PR
+      - name: Build & (conditionally) push
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: ${{ inputs.working-directory }}
           file: ${{ inputs.working-directory }}/Dockerfile
           push: ${{ github.event_name != 'pull_request' }}
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:${{ inputs.docker-tag || github.ref_name }}
             ${{ secrets.ACR_LOGIN_SERVER }}/week08/${{ inputs.image-name }}:sha-${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
