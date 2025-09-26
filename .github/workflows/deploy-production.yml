@@ -4,6 +4,14 @@ on:
   push:
     branches: [ main ]
 
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
@@ -34,9 +42,8 @@ jobs:
             frontend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/frontend:latest
             backend-container=${{ secrets.ACR_LOGIN_SERVER }}/week08/backend:latest
 
-      - name: Show rollout status & events
+      - name: Show rollout status & services
         run: |
-          kubectl rollout status deploy/frontend --timeout=120s || true
-          kubectl rollout status deploy/backend --timeout=120s || true
-          kubectl get pods -o wide
-          kubectl get svc -o wide
+          kubectl rollout status deploy/frontend --timeout=180s || true
+          kubectl rollout status deploy/backend  --timeout=180s || true
+          kubectl get deploy,po,svc -o wide
