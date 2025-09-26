@@ -104,5 +104,4 @@ jobs:
           tags: |
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:${{ github.ref_name }}
             ${{ secrets.ACR_LOGIN_SERVER }}/${{ github.repository }}/${{ inputs.image-name }}:sha-${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          
