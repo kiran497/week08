@@ -32,26 +32,40 @@ jobs:
       - name: Detect package.json
         id: detect
         working-directory: ${{ inputs.working-directory }}
+        shell: bash
         run: |
-          if [ -f package.json ]; then echo "has_pkg=true" >> $GITHUB_OUTPUT; else echo "has_pkg=false" >> $GITHUB_OUTPUT; fi
+          if [[ -f package.json ]]; then
+            echo "has_pkg=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_pkg=false" >> "$GITHUB_OUTPUT"
+          fi
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Setup Node
+        if: steps.detect.outputs.has_pkg == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: ${{ inputs.node-version }}
           cache: npm
           cache-dependency-path: ${{ inputs.working-directory }}/package-lock.json
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Install deps
+        if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
+        shell: bash
         run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
+          if [[ -f package-lock.json ]]; then
+            npm ci
+          else
+            npm install
+          fi
 
-      - if: steps.detect.outputs.has_pkg == 'true'
+      - name: Lint
+        if: steps.detect.outputs.has_pkg == 'true'
         working-directory: ${{ inputs.working-directory }}
         run: npm run lint --if-present
 
-      - if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
+      - name: Test
+        if: steps.detect.outputs.has_pkg == 'true' && inputs.run-tests
         working-directory: ${{ inputs.working-directory }}
         run: npm test --if-present -- --ci
 
@@ -63,16 +77,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-    # Helpful debug to catch bad paths
+      # Helpful debug to catch wrong paths
       - name: Debug – verify Dockerfile exists
+        shell: bash
         run: |
           echo "Expecting: ${{ inputs.working-directory }}/Dockerfile"
-          ls -la
           ls -la "${{ inputs.working-directory }}"
           test -f "${{ inputs.working-directory }}/Dockerfile" || (echo "Missing Dockerfile at ${{ inputs.working-directory }}/Dockerfile" && exit 1)
 
       # Login to ACR (skip on PRs)
-      - name: Docker Login (skip on PRs)
+      - name: Login to ACR (skip on PRs)
         if: github.event_name != 'pull_request'
         uses: azure/docker-login@v2
         with:
