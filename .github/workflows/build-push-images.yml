@@ -1,0 +1,23 @@
+name: Build images (manual)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  frontend:
+    uses: ./.github/workflows/_reusable-ci.yml
+    secrets: inherit
+    with:
+      working-directory: frontend
+      run-tests: false
+      build-docker: true
+      image-name: frontend
+
+  backend:
+    uses: ./.github/workflows/_reusable-ci.yml
+    secrets: inherit
+    with:
+      working-directory: backend
+      run-tests: false
+      build-docker: true
+      image-name: backend
